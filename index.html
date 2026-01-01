@@ -67,7 +67,7 @@
             z-index: 10;
         }
     </style>
-    <!-- 引入 Google GenAI SDK -->
+    <!-- 引入 Google GenAI SDK (修正 importmap，移除不必要的 React) -->
     <script type="importmap">
 {
   "imports": {
@@ -542,7 +542,7 @@ C產品 (旗艦型), 5000, 4000, 3500, 3
                     reader.readAsDataURL(file);
                 });
 
-                // 呼叫 Gemini (使用修正後的 SDK 用法)
+                // 呼叫 Gemini
                 const ai = new GoogleGenAI({ apiKey: apiKey });
                 
                 // 定義 Prompt
@@ -554,9 +554,9 @@ C產品 (旗艦型), 5000, 4000, 3500, 3
                     If you cannot find one of them, return empty string.
                 `;
 
-                // 使用 ai.models.generateContent (舊版 getGenerativeModel 已棄用)
+                // 修正重點：使用 gemini-2.5-flash-latest，這是目前較穩定且功能強大的版本
                 const response = await ai.models.generateContent({
-                    model: 'gemini-2.0-flash', 
+                    model: 'gemini-2.5-flash-latest', 
                     contents: {
                         parts: [
                             { text: promptText },
@@ -565,7 +565,6 @@ C產品 (旗艦型), 5000, 4000, 3500, 3
                     }
                 });
 
-                // 新版 SDK 讀取文字是用 .text 屬性，不是 .text() 方法
                 const responseText = response.text;
                 console.log("Gemini Response:", responseText);
 
@@ -596,7 +595,14 @@ C產品 (旗艦型), 5000, 4000, 3500, 3
 
             } catch (error) {
                 console.error("OCR Error:", error);
-                alert("❌ 辨識失敗，請確認 API Key 是否正確。\n錯誤訊息: " + error.message);
+                
+                // 針對 Quota Exceeded (429) 給予友善提示
+                if (error.message.includes("429") || error.message.includes("Quota")) {
+                     alert("⏳ 辨識失敗：免費版 API 使用量已達上限。\n\n請稍候（約1-2分鐘）再試，或是更換 API Key。");
+                } else {
+                     alert("❌ 辨識失敗，請確認 API Key 是否正確。\n錯誤訊息: " + error.message);
+                }
+
             } finally {
                 els.scanBtn.disabled = false;
                 els.scanBtn.innerHTML = originalBtnHtml;
