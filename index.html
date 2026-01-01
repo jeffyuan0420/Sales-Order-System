@@ -3,19 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>業務行動接單系統</title>
+    <title>業務行動接單系統 Pro</title>
     <!-- 引入 Bootstrap 5 CDN -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
     <style>
         /* 自定義 CSS */
         body {
-            background-color: #f8f9fa;
-            padding-bottom: 120px; /* 預留底部固定欄位空間，避免內容被遮擋 */
+            background-color: #f0f2f5;
+            padding-bottom: 140px;
             font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         }
         
-        /* 底部固定總金額與送出按鈕區域 */
         .sticky-bottom-bar {
             position: fixed;
             bottom: 0;
@@ -27,46 +26,52 @@
             z-index: 1000;
         }
 
-        /* 卡片樣式微調 */
         .card {
             margin-bottom: 15px;
             border: none;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            border-radius: 16px;
+            overflow: hidden;
         }
 
         .card-header {
             background-color: white;
             border-bottom: 1px solid #f0f0f0;
-            font-weight: bold;
-            color: #0d6efd; /* Bootstrap Primary Blue */
-            padding: 1rem;
-            border-radius: 12px 12px 0 0 !important;
-        }
-
-        /* 列表項目樣式 */
-        .list-group-item {
-            border-left: none;
-            border-right: none;
+            font-weight: 700;
+            color: #2c3e50;
             padding: 1rem;
         }
 
-        /* 價格強調色 */
         .price-text {
             color: #0d6efd;
             font-weight: bold;
         }
         
-        /* Loading 遮罩樣式 */
-        .spinner-border-sm {
-            width: 1.2rem;
-            height: 1.2rem;
-            border-width: 0.2em;
+        /* 模式切換開關 */
+        .mode-switch .btn-check:checked + .btn {
+            background-color: #0d6efd;
+            color: white;
+            border-color: #0d6efd;
+        }
+        .mode-switch .btn {
+            border-radius: 20px;
+            padding: 0.3rem 1rem;
+            font-size: 0.9rem;
+        }
+
+        /* 掃描按鈕定位 */
+        .scan-btn-wrapper {
+            position: absolute;
+            right: 15px;
+            top: 10px;
+            z-index: 10;
         }
     </style>
-<script type="importmap">
+    <!-- 引入 Google GenAI SDK -->
+    <script type="importmap">
 {
   "imports": {
+    "@google/genai": "https://esm.run/@google/genai",
     "react": "https://esm.sh/react@^19.2.3",
     "react/": "https://esm.sh/react@^19.2.3/"
   }
@@ -75,30 +80,47 @@
 </head>
 <body>
     <!-- 導覽列 -->
-    <nav class="navbar navbar-dark bg-primary mb-4 shadow-sm">
+    <nav class="navbar navbar-dark bg-primary mb-3 shadow-sm">
         <div class="container-fluid justify-content-between" style="max-width: 600px;">
-            <span class="navbar-brand mb-0 h1">業務行動接單系統</span>
-            <button class="btn btn-sm btn-outline-light" onclick="configureApiUrl()" title="設定 API 網址">
+            <span class="navbar-brand mb-0 h1 fw-bold"><i class="bi bi-briefcase-fill me-2"></i>業務接單 Pro</span>
+            <button class="btn btn-sm btn-outline-light" onclick="openSettingsModal()" title="設定">
                 <i class="bi bi-gear-fill"></i> 設定
             </button>
         </div>
     </nav>
 
     <div class="container" style="max-width: 600px;">
+
+        <!-- 報價模式切換 -->
+        <div class="d-flex justify-content-center mb-3 mode-switch bg-white p-2 rounded-pill shadow-sm mx-auto" style="width: fit-content;">
+            <input type="radio" class="btn-check" name="priceMode" id="modeDirect" value="direct" checked onchange="handleModeChange()">
+            <label class="btn btn-outline-secondary border-0" for="modeDirect">直客模式</label>
+            
+            <input type="radio" class="btn-check" name="priceMode" id="modeDealer" value="dealer" onchange="handleModeChange()">
+            <label class="btn btn-outline-secondary border-0" for="modeDealer">經銷模式</label>
+        </div>
         
         <!-- 客戶資訊區 -->
-        <div class="card">
+        <div class="card position-relative">
             <div class="card-header d-flex align-items-center">
-                <i class="bi bi-person-fill me-2"></i> 客戶資訊
+                <i class="bi bi-person-vcard-fill me-2 text-primary"></i> 客戶資訊
+                
+                <!-- 掃描按鈕 -->
+                <div class="scan-btn-wrapper">
+                    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;" onchange="handleImageScan(this)">
+                    <button class="btn btn-sm btn-warning text-dark fw-bold shadow-sm" onclick="document.getElementById('cameraInput').click()" id="scanBtn">
+                        <i class="bi bi-camera-fill"></i> 掃名片
+                    </button>
+                </div>
             </div>
             <div class="card-body">
                 <div class="mb-3">
-                    <label for="customerName" class="form-label">客戶名稱</label>
-                    <input type="text" class="form-control form-control-lg" id="customerName" placeholder="請輸入客戶大名">
+                    <label for="companyName" class="form-label text-muted small">公司名稱</label>
+                    <input type="text" class="form-control" id="companyName" placeholder="掃描或輸入公司名稱">
                 </div>
                 <div class="mb-0">
-                    <label for="customerPhone" class="form-label">聯絡電話</label>
-                    <input type="tel" class="form-control form-control-lg" id="customerPhone" placeholder="請輸入聯絡電話">
+                    <label for="customerName" class="form-label text-muted small">聯絡人姓名</label>
+                    <input type="text" class="form-control" id="customerName" placeholder="掃描或輸入聯絡人">
                 </div>
             </div>
         </div>
@@ -106,23 +128,25 @@
         <!-- 產品選擇區 -->
         <div class="card">
             <div class="card-header d-flex align-items-center">
-                <i class="bi bi-cart-plus-fill me-2"></i> 產品選擇
+                <i class="bi bi-cart-plus-fill me-2 text-primary"></i> 產品選擇
             </div>
             <div class="card-body">
                 <div class="mb-3">
-                    <label for="productSelect" class="form-label">選擇產品</label>
-                    <select class="form-select form-select-lg" id="productSelect">
+                    <label for="productSelect" class="form-label text-muted small">選擇產品</label>
+                    <select class="form-select form-select-lg" id="productSelect" onchange="updatePricePreview()">
                         <option value="" selected disabled>-- 請選擇產品 --</option>
-                        <!-- 選項將由 JS 動態產生 -->
                     </select>
+                    <div class="mt-2 text-end" id="pricePreview" style="font-size: 0.9rem; color: #6c757d; min-height: 20px;">
+                        <!-- 價格提示顯示於此 -->
+                    </div>
                 </div>
                 <div class="row g-2">
-                    <div class="col-5">
-                        <label for="quantity" class="form-label">數量</label>
-                        <input type="number" class="form-control form-control-lg" id="quantity" value="1" min="1">
+                    <div class="col-4">
+                        <label for="quantity" class="form-label text-muted small">數量</label>
+                        <input type="number" class="form-control form-control-lg text-center" id="quantity" value="1" min="1" oninput="updatePricePreview()">
                     </div>
-                    <div class="col-7 d-flex align-items-end">
-                        <button class="btn btn-primary btn-lg w-100" id="addBtn">
+                    <div class="col-8 d-flex align-items-end">
+                        <button class="btn btn-primary btn-lg w-100 shadow-sm" id="addBtn">
                             <i class="bi bi-plus-lg"></i> 加入清單
                         </button>
                     </div>
@@ -132,13 +156,15 @@
 
         <!-- 訂單明細區 -->
         <div class="card">
-            <div class="card-header d-flex align-items-center">
-                <i class="bi bi-list-check me-2"></i> 訂單明細
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <span><i class="bi bi-list-check me-2 text-primary"></i> 訂單明細</span>
+                <span class="badge bg-light text-dark border" id="itemCountBadge">0 項</span>
             </div>
             <div class="card-body p-0">
                 <ul class="list-group list-group-flush" id="orderList">
                     <li class="list-group-item text-center text-muted py-5" id="emptyMsg">
-                        目前清單是空的，請上方加入產品。
+                        <i class="bi bi-basket display-6 d-block mb-3 opacity-25"></i>
+                        尚未加入任何商品
                     </li>
                 </ul>
             </div>
@@ -146,39 +172,105 @@
 
     </div>
 
-    <!-- 底部固定區 (總金額與送出) -->
+    <!-- 底部固定區 -->
     <div class="sticky-bottom-bar">
         <div class="container" style="max-width: 600px;">
             <div class="d-flex justify-content-between align-items-center mb-2">
-                <span class="h5 mb-0 text-secondary">總金額</span>
-                <span class="h3 mb-0 price-text" id="totalAmount">$0</span>
+                <span class="h6 mb-0 text-secondary">總金額</span>
+                <span class="h2 mb-0 price-text" id="totalAmount">$0</span>
             </div>
-            <button class="btn btn-success w-100 py-3 fw-bold fs-5 shadow d-flex align-items-center justify-content-center gap-2" id="submitBtn">
-                <span>建立訂單</span>
+            <button class="btn btn-success w-100 py-2 fw-bold fs-5 shadow d-flex align-items-center justify-content-center gap-2" id="submitBtn">
+                建立訂單
             </button>
         </div>
     </div>
 
-    <!-- 引入 Bootstrap JS Bundle -->
+    <!-- 設定 Modal -->
+    <div class="modal fade" id="settingsModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-sliders me-2"></i>系統設定</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Tab 導航 -->
+                    <ul class="nav nav-tabs mb-3" id="settingTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="data-tab" data-bs-toggle="tab" data-bs-target="#data-content" type="button">產品資料</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="api-tab" data-bs-toggle="tab" data-bs-target="#api-content" type="button">API 連線</button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content" id="myTabContent">
+                        <!-- 產品資料 Tab -->
+                        <div class="tab-pane fade show active" id="data-content">
+                            <div class="alert alert-info small p-2">
+                                <strong>Excel 匯入說明：</strong><br>
+                                請複製 Excel 內容並貼上到下方。<br>
+                                欄位順序：<code>產品名稱, 直客價, 經銷價(單), 經銷價(批), 批發門檻</code>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small text-muted">CSV 資料 (每行一筆)</label>
+                                <textarea class="form-control" id="csvInput" rows="10" style="font-family: monospace; font-size: 0.85rem; white-space: pre;"></textarea>
+                            </div>
+                            <div class="d-flex justify-content-end">
+                                <button class="btn btn-sm btn-outline-secondary me-2" onclick="restoreDefaultData()">恢復預設</button>
+                                <button class="btn btn-primary" onclick="saveProductData()">儲存更新</button>
+                            </div>
+                        </div>
+
+                        <!-- API 連線 Tab -->
+                        <div class="tab-pane fade" id="api-content">
+                            <div class="mb-4">
+                                <label class="form-label fw-bold">Google Apps Script 網址 (送單用)</label>
+                                <input type="text" class="form-control" id="gasUrlInput" placeholder="https://script.google.com/...">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Gemini API Key (名片 OCR 用)</label>
+                                <input type="password" class="form-control" id="geminiKeyInput" placeholder="貼上您的 API Key">
+                                <div class="form-text">
+                                    <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-decoration-none">👉 點此取得免費 API Key</a>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-end">
+                                <button class="btn btn-primary" onclick="saveApiSettings()">儲存設定</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     
     <!-- 應用程式邏輯 -->
-    <script>
-        /**
-         * 1. 資料定義
-         */
-        const PRODUCTS = [
-            { id: 'p1', name: 'A產品', price: 1000 },
-            { id: 'p2', name: 'B產品', price: 2500 },
-            { id: 'p3', name: 'C產品', price: 5000 }
-        ];
+    <script type="module">
+        import { GoogleGenAI } from "@google/genai";
 
+        // ==========================================
+        // 1. 資料與狀態管理
+        // ==========================================
+        
+        // 預設範例資料 (符合您的需求格式)
+        const DEFAULT_CSV = 
+`A產品 (標準型), 1000, 800, 700, 10
+B產品 (專業型), 2500, 2000, 1800, 5
+C產品 (旗艦型), 5000, 4000, 3500, 3
+消耗品-濾網, 500, 400, 300, 20`;
+
+        let products = [];
         let orderItems = [];
-
-        /**
-         * 2. DOM 元素取得
-         */
+        let currentMode = 'direct'; // 'direct' (直客) or 'dealer' (經銷)
+        
+        // DOM 元素快取
         const els = {
+            companyName: document.getElementById('companyName'),
+            customerName: document.getElementById('customerName'),
             productSelect: document.getElementById('productSelect'),
             quantityInput: document.getElementById('quantity'),
             addBtn: document.getElementById('addBtn'),
@@ -186,64 +278,167 @@
             emptyMsg: document.getElementById('emptyMsg'),
             totalAmount: document.getElementById('totalAmount'),
             submitBtn: document.getElementById('submitBtn'),
-            customerName: document.getElementById('customerName'),
-            customerPhone: document.getElementById('customerPhone')
+            scanBtn: document.getElementById('scanBtn'),
+            pricePreview: document.getElementById('pricePreview'),
+            csvInput: document.getElementById('csvInput'),
+            gasUrlInput: document.getElementById('gasUrlInput'),
+            geminiKeyInput: document.getElementById('geminiKeyInput'),
+            modeRadios: document.getElementsByName('priceMode'),
+            itemCountBadge: document.getElementById('itemCountBadge')
         };
 
-        /**
-         * 3. 初始化功能
-         */
-        function init() {
-            // 產生產品下拉選單選項
-            PRODUCTS.forEach(p => {
-                const option = document.createElement('option');
-                option.value = p.id;
-                option.textContent = `${p.name} - $${p.price.toLocaleString()}`;
-                els.productSelect.appendChild(option);
-            });
+        const settingsModal = new bootstrap.Modal(document.getElementById('settingsModal'));
 
-            // 綁定事件監聽器
+        // ==========================================
+        // 2. 初始化與設定功能
+        // ==========================================
+
+        window.init = function() {
+            loadSettings();
+            
+            // 綁定事件
             els.addBtn.addEventListener('click', handleAddItem);
             els.submitBtn.addEventListener('click', handleSubmit);
             
-            // 初始渲染
-            renderOrderList();
+            // 初始價格模式
+            const checked = document.querySelector('input[name="priceMode"]:checked');
+            if (checked) currentMode = checked.value;
         }
 
-        /**
-         * 4. 輔助函式：API 網址管理 (使用 LocalStorage)
-         */
-        function getApiUrl() {
-            let url = localStorage.getItem('gas_api_url');
-            if (!url) {
-                url = prompt("這是您第一次使用，請輸入您的 Google Apps Script 網頁應用程式網址：\n(例如：https://script.google.com/.../exec)");
-                if (url) {
-                    // 簡單驗證網址格式
-                    if (!url.startsWith("http")) {
-                        alert("網址格式錯誤，請確認包含 https://");
-                        return null;
-                    }
-                    localStorage.setItem('gas_api_url', url.trim());
+        function loadSettings() {
+            // 載入產品資料
+            const storedCsv = localStorage.getItem('product_csv');
+            els.csvInput.value = storedCsv || DEFAULT_CSV;
+            parseAndSetProducts(els.csvInput.value);
+
+            // 載入 API 設定
+            els.gasUrlInput.value = localStorage.getItem('gas_api_url') || '';
+            els.geminiKeyInput.value = localStorage.getItem('gemini_api_key') || '';
+        }
+
+        // 解析 CSV 轉為產品物件
+        function parseAndSetProducts(csvText) {
+            products = [];
+            const lines = csvText.split('\n');
+            
+            lines.forEach((line, index) => {
+                const cols = line.split(',').map(c => c.trim());
+                // 確保至少有名稱和一個價格
+                if (cols.length >= 2 && cols[0] !== "") {
+                    products.push({
+                        id: `p${index}`,
+                        name: cols[0],
+                        priceDirect: parseInt(cols[1]) || 0,
+                        priceDealer: parseInt(cols[2]) || parseInt(cols[1]) || 0, // 若無經銷價則同直客價
+                        priceDealerBulk: parseInt(cols[3]) || parseInt(cols[2]) || 0,
+                        bulkThreshold: parseInt(cols[4]) || 9999
+                    });
                 }
-            }
-            return url;
+            });
+            renderProductOptions();
         }
 
-        // 綁定到 window 供按鈕呼叫
-        window.configureApiUrl = function() {
-            const currentUrl = localStorage.getItem('gas_api_url') || "";
-            const newUrl = prompt("請輸入新的 Google Apps Script 網址：", currentUrl);
-            if (newUrl !== null) { // 按取消回傳 null
-                localStorage.setItem('gas_api_url', newUrl.trim());
-                alert("網址已更新！");
+        window.openSettingsModal = function() {
+            settingsModal.show();
+        };
+
+        window.saveProductData = function() {
+            const csvText = els.csvInput.value.trim();
+            localStorage.setItem('product_csv', csvText);
+            parseAndSetProducts(csvText);
+            alert('產品資料已更新！');
+            settingsModal.hide();
+        };
+
+        window.restoreDefaultData = function() {
+            if(confirm('確定要恢復預設範例資料嗎？目前輸入將會遺失。')) {
+                els.csvInput.value = DEFAULT_CSV;
             }
         };
 
-        /**
-         * 5. 核心邏輯函式
-         */
+        window.saveApiSettings = function() {
+            localStorage.setItem('gas_api_url', els.gasUrlInput.value.trim());
+            localStorage.setItem('gemini_api_key', els.geminiKeyInput.value.trim());
+            alert('API 設定已儲存！');
+            settingsModal.hide();
+        };
 
-        // 加入產品到清單
+        // ==========================================
+        // 3. 核心邏輯 (價格計算與 UI)
+        // ==========================================
+
+        window.handleModeChange = function() {
+            const checked = document.querySelector('input[name="priceMode"]:checked');
+            currentMode = checked ? checked.value : 'direct';
+            
+            // 重新計算購物車內所有價格
+            orderItems = orderItems.map(item => {
+                const product = products.find(p => p.id === item.productId);
+                if (product) {
+                    const newPrice = calculatePrice(product, item.quantity);
+                    return {
+                        ...item,
+                        unitPrice: newPrice,
+                        subtotal: newPrice * item.quantity
+                    };
+                }
+                return item;
+            });
+            
+            renderOrderList();
+            updatePricePreview();
+        };
+
+        // 價格計算引擎
+        function calculatePrice(product, qty) {
+            if (currentMode === 'direct') {
+                return product.priceDirect;
+            } else {
+                // 經銷模式：判斷數量是否達到門檻
+                if (qty >= product.bulkThreshold && product.priceDealerBulk > 0) {
+                    return product.priceDealerBulk;
+                } else {
+                    return product.priceDealer;
+                }
+            }
+        }
+
+        function renderProductOptions() {
+            els.productSelect.innerHTML = '<option value="" selected disabled>-- 請選擇產品 --</option>';
+            products.forEach(p => {
+                const option = document.createElement('option');
+                option.value = p.id;
+                option.textContent = p.name;
+                els.productSelect.appendChild(option);
+            });
+        }
+
+        window.updatePricePreview = function() {
+            const productId = els.productSelect.value;
+            const qty = parseInt(els.quantityInput.value) || 1;
+            
+            if (!productId) {
+                els.pricePreview.textContent = '';
+                return;
+            }
+
+            const product = products.find(p => p.id === productId);
+            if (product) {
+                const unitPrice = calculatePrice(product, qty);
+                let text = '';
+                if (currentMode === 'direct') {
+                    text = `直客價: $${unitPrice}`;
+                } else {
+                    if (qty >= product.bulkThreshold) {
+                        text = `🔥 經銷大量價: $${unitPrice} (已達 ${product.bulkThreshold} 個)`;
+                    } else {
+                        text = `經銷單機價: $${unitPrice} (滿 ${product.bulkThreshold} 個可享批發價)`;
+                    }
+                }
+                els.pricePreview.innerHTML = text;
+            }
+        }
+
         function handleAddItem() {
             const productId = els.productSelect.value;
             const qty = parseInt(els.quantityInput.value);
@@ -251,33 +446,38 @@
             if (!productId) { alert('請選擇一項產品！'); return; }
             if (!qty || qty <= 0) { alert('數量必須大於 0！'); return; }
 
-            const product = PRODUCTS.find(p => p.id === productId);
+            const product = products.find(p => p.id === productId);
             if (!product) return;
 
+            const unitPrice = calculatePrice(product, qty);
+            
             const newItem = {
-                ...product,
+                productId: product.id,
+                name: product.name,
                 quantity: qty,
-                subtotal: product.price * qty,
+                unitPrice: unitPrice,
+                subtotal: unitPrice * qty,
                 uniqueId: Date.now().toString() + Math.random().toString(36).substr(2, 5)
             };
 
             orderItems.push(newItem);
             renderOrderList();
             
+            // 重置選擇
             els.productSelect.value = '';
             els.quantityInput.value = 1;
+            els.pricePreview.textContent = '';
         }
 
-        // 刪除項目
         window.deleteItem = function(uniqueId) {
             if(!confirm('確定要刪除此項目嗎？')) return;
             orderItems = orderItems.filter(item => item.uniqueId !== uniqueId);
             renderOrderList();
         };
 
-        // 渲染訂單列表
         function renderOrderList() {
             els.orderList.innerHTML = '';
+            els.itemCountBadge.textContent = `${orderItems.length} 項`;
 
             if (orderItems.length === 0) {
                 els.orderList.appendChild(els.emptyMsg);
@@ -292,18 +492,18 @@
 
             orderItems.forEach(item => {
                 const li = document.createElement('li');
-                li.className = 'list-group-item d-flex justify-content-between align-items-center animate-fade-in';
+                li.className = 'list-group-item d-flex justify-content-between align-items-center';
                 li.innerHTML = `
                     <div class="flex-grow-1">
-                        <div class="fw-bold fs-5">${item.name}</div>
-                        <div class="text-muted">
-                            $${item.price.toLocaleString()} x <span class="badge bg-secondary rounded-pill">${item.quantity}</span>
+                        <div class="fw-bold text-dark">${item.name}</div>
+                        <div class="text-muted small">
+                            $${item.unitPrice.toLocaleString()} x <span class="badge bg-secondary rounded-pill">${item.quantity}</span>
                         </div>
                     </div>
                     <div class="text-end">
-                        <div class="price-text fs-5 mb-1">$${item.subtotal.toLocaleString()}</div>
-                        <button class="btn btn-sm btn-outline-danger" onclick="deleteItem('${item.uniqueId}')">
-                            <i class="bi bi-trash"></i> 刪除
+                        <div class="price-text fw-bold mb-1">$${item.subtotal.toLocaleString()}</div>
+                        <button class="btn btn-sm btn-link text-danger p-0 text-decoration-none" onclick="deleteItem('${item.uniqueId}')">
+                            <i class="bi bi-trash"></i> 移除
                         </button>
                     </div>
                 `;
@@ -314,45 +514,124 @@
             els.totalAmount.textContent = `$${total.toLocaleString()}`;
         }
 
-        // 送出訂單
-        function handleSubmit() {
-            if (orderItems.length === 0) return;
+        // ==========================================
+        // 4. 名片辨識 (Gemini API)
+        // ==========================================
 
-            const name = els.customerName.value.trim();
-            const phone = els.customerPhone.value.trim();
+        window.handleImageScan = async function(input) {
+            const file = input.files[0];
+            if (!file) return;
 
-            if (!name || !phone) {
-                alert('請填寫完整的客戶資料（名稱與電話）！');
+            const apiKey = localStorage.getItem('gemini_api_key');
+            if (!apiKey) {
+                alert("⚠️ 請先設定 API Key！\n\n請點擊右上角「設定」，在 API 連線分頁中貼上您的 Gemini API Key。");
+                input.value = ''; // 清空
                 return;
             }
 
-            // 取得或詢問 API 網址
-            const apiUrl = getApiUrl();
+            // UI Loading 狀態
+            const originalBtnHtml = els.scanBtn.innerHTML;
+            els.scanBtn.disabled = true;
+            els.scanBtn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 辨識中...`;
+
+            try {
+                // 圖片轉 Base64
+                const base64Data = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                    reader.readAsDataURL(file);
+                });
+
+                // 呼叫 Gemini
+                // 使用支援圖片的 flash 模型
+                const ai = new GoogleGenAI({ apiKey: apiKey });
+                const model = ai.getGenerativeModel({ model: "gemini-2.5-flash-latest" });
+
+                const prompt = `
+                    You are an OCR expert. Analyze this business card image.
+                    Extract the "Company Name" and "Contact Person Name".
+                    Return ONLY a JSON object. Do not format as markdown.
+                    Structure: {"company": "...", "name": "..."}
+                    If you cannot find one of them, return empty string.
+                `;
+
+                const result = await model.generateContent([
+                    prompt,
+                    { inlineData: { data: base64Data, mimeType: file.type } }
+                ]);
+
+                const responseText = result.response.text();
+                console.log("Gemini Response:", responseText);
+
+                // 清理與解析 JSON (移除可能的 markdown 符號)
+                const cleanJson = responseText.replace(/```json|```/g, '').trim();
+                const data = JSON.parse(cleanJson);
+
+                if (data.company) els.companyName.value = data.company;
+                if (data.name) els.customerName.value = data.name;
+                
+                alert(`✅ 辨識成功！\n公司：${data.company || '未偵測到'}\n聯絡人：${data.name || '未偵測到'}`);
+
+            } catch (error) {
+                console.error("OCR Error:", error);
+                alert("❌ 辨識失敗，請確認 API Key 是否正確，或手動輸入。\n錯誤訊息: " + error.message);
+            } finally {
+                els.scanBtn.disabled = false;
+                els.scanBtn.innerHTML = originalBtnHtml;
+                input.value = ''; // 清空以利下次選擇
+            }
+        };
+
+        // ==========================================
+        // 5. 送出訂單
+        // ==========================================
+        
+        function handleSubmit() {
+            if (orderItems.length === 0) return;
+
+            const company = els.companyName.value.trim();
+            const contact = els.customerName.value.trim();
+
+            if (!company && !contact) {
+                alert('請至少填寫公司名稱或聯絡人姓名！');
+                return;
+            }
+
+            const apiUrl = localStorage.getItem('gas_api_url');
             if (!apiUrl) {
-                alert("未設定 API 網址，無法送出。");
+                alert("⚠️ 未設定 GAS 網址！\n\n請至設定頁面填寫 Google Apps Script 網址，才能將訂單送出。");
+                openSettingsModal();
                 return;
             }
 
             const total = orderItems.reduce((acc, item) => acc + item.subtotal, 0);
-            let detailsStr = orderItems.map(item => `${item.name} x ${item.quantity}`).join(", ");
-            detailsStr += ` (共 ${orderItems.length} 項商品)`;
+            
+            // 組合詳細內容
+            let detailsStr = orderItems.map(item => 
+                `${item.name} x${item.quantity} ($${item.unitPrice})`
+            ).join("\n");
+            
+            // 標註模式
+            const modeText = currentMode === 'direct' ? '直客' : '經銷';
 
             const orderData = {
-                name: name,
-                phone: phone,
+                company: company,
+                contact: contact,
+                type: modeText, // 新增欄位：客戶類型
                 amount: total,
-                details: detailsStr
+                details: detailsStr,
+                timestamp: new Date().toLocaleString()
             };
 
-            // Loading 狀態
+            // Loading
             const originalBtnText = els.submitBtn.innerHTML;
             els.submitBtn.disabled = true;
             els.submitBtn.innerHTML = `
                 <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                <span>送出中...</span>
+                <span>傳送中...</span>
             `;
 
-            // 發送請求
+            // POST
             fetch(apiUrl, {
                 method: "POST",
                 body: JSON.stringify(orderData),
@@ -361,15 +640,15 @@
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    alert("✅ 訂單已送入 Notion！");
+                    alert(`✅ 訂單已建立！\n金額：$${total}\n客戶：${company || contact}`);
                     resetForm();
                 } else {
-                    alert("❌ 發送失敗：" + data.message);
+                    alert("❌ 後端回傳失敗：" + data.message);
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert("⚠️ 連線發生錯誤，請檢查網路或 API 網址是否正確。");
+                alert("⚠️ 連線錯誤，請檢查網路或 API 網址。");
             })
             .finally(() => {
                 els.submitBtn.disabled = false;
@@ -379,13 +658,13 @@
 
         function resetForm() {
             orderItems = [];
+            els.companyName.value = '';
             els.customerName.value = '';
-            els.customerPhone.value = '';
             renderOrderList();
         }
 
+        // 啟動
         init();
-
     </script>
 </body>
 </html>
